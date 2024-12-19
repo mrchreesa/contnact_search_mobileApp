@@ -3,6 +3,7 @@ package com.example.app6contactssearch
 import Contact
 import ContactsAdapter
 import android.Manifest
+import android.content.ContentProviderOperation
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -16,6 +17,9 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import android.text.TextWatcher
 import android.text.Editable
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 
 class MainActivity : AppCompatActivity() {
     private lateinit var adapter: ContactsAdapter
@@ -65,12 +69,13 @@ class MainActivity : AppCompatActivity() {
     private fun checkPermissions() {
         val permissions = arrayOf(
             Manifest.permission.READ_CONTACTS,
+            Manifest.permission.WRITE_CONTACTS,
             Manifest.permission.CALL_PHONE
-
         )
         
         if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
             loadContacts()
+            writeContactsToPhone()
         } else {
             ActivityCompat.requestPermissions(this, permissions, PERMISSIONS_REQUEST_CODE)
         }
@@ -133,6 +138,88 @@ class MainActivity : AppCompatActivity() {
             }
             allContacts = contacts
             adapter.updateContacts(contacts)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun writeContactsToPhone() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CONTACTS) 
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.WRITE_CONTACTS),
+                PERMISSIONS_REQUEST_CODE
+            )
+            return
+        }
+
+        try {
+            assets.open("sample_contacts.txt").bufferedReader().useLines { lines ->
+                lines.forEach { line ->
+                    val parts = line.split(",").map { it.trim().removeSurrounding("\"") }
+                    if (parts.size >= 4) {
+                        val name = parts[0]
+                        val email = parts[1]
+                        val phone = parts[2]
+                        val photoReference = parts[3]
+                        
+                        val ops = ArrayList<ContentProviderOperation>()
+                        
+                        ops.add(ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
+                            .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null)
+                            .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null)
+                            .build())
+
+                        ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                            .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                            .withValue(ContactsContract.Data.MIMETYPE, 
+                                ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+                            .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name)
+                            .build())
+
+                        ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                            .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                            .withValue(ContactsContract.Data.MIMETYPE,
+                                ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                            .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
+                            .withValue(ContactsContract.CommonDataKinds.Phone.TYPE,
+                                ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+                            .build())
+
+                        ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                            .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                            .withValue(ContactsContract.Data.MIMETYPE,
+                                ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
+                            .withValue(ContactsContract.CommonDataKinds.Email.ADDRESS, email)
+                            .withValue(ContactsContract.CommonDataKinds.Email.TYPE,
+                                ContactsContract.CommonDataKinds.Email.TYPE_WORK)
+                            .build())
+
+                        val resourceId = photoReference.replace("R.drawable.", "")
+                        val drawableId = resources.getIdentifier(
+                            resourceId,
+                            "drawable",
+                            packageName
+                        )
+                        
+                        if (drawableId != 0) {
+                            val bitmap = BitmapFactory.decodeResource(resources, drawableId)
+                            val stream = ByteArrayOutputStream()
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+                            
+                            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                                .withValue(ContactsContract.Data.MIMETYPE,
+                                    ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE)
+                                .withValue(ContactsContract.CommonDataKinds.Photo.PHOTO, stream.toByteArray())
+                                .build())
+                        }
+
+                        contentResolver.applyBatch(ContactsContract.AUTHORITY, ops)
+                    }
+                }
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
