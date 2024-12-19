@@ -3,6 +3,6 @@
 "Benjamin Adams","benjamin.adams@example.com","020 7893 6298", R.drawable.man3
 "Samuel Thomson","samuel.thompson@example.com","020 8636 6068", R.drawable.man4
 "Emma Bennett","emma.bennett@example.com","7939 553456", R.drawable.woman1
-Liz Bacon","liz.bacon@example.com","7930 590511", R.drawable.woman2
+"Liz Bacon","liz.bacon@example.com","7930 590511", R.drawable.woman2
 "Sapphire Robinson","sapphire.robinson@example.com","7930 876239", R.drawable.woman3
 "Barbara Brooks","barbara.brooks@example.com","7939 347600", R.drawable.woman4
